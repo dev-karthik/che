@@ -25,6 +25,8 @@ import org.eclipse.che.api.machine.server.model.impl.ServerConfImpl;
 import org.eclipse.che.api.machine.server.recipe.RecipeImpl;
 import org.eclipse.che.api.machine.server.spi.Instance;
 import org.eclipse.che.api.machine.server.spi.InstanceKey;
+import org.eclipse.che.api.machine.server.util.RecipeDownloader;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.testng.MockitoTestNGListener;
 import org.testng.annotations.BeforeMethod;
@@ -48,19 +50,22 @@ import static org.testng.Assert.assertEquals;
 @Listeners(MockitoTestNGListener.class)
 public class SshMachineInstanceProviderTest {
     @Mock
+    private RecipeDownloader recipeDownloader;
+
+    @Mock
     private SshMachineFactory  sshMachineFactory;
     @Mock
     private SshClient          sshClient;
     @Mock
     private SshMachineInstance sshMachineInstance;
 
+    @InjectMocks
     private SshMachineInstanceProvider provider;
     private RecipeImpl                 recipe;
     private MachineImpl                machine;
 
     @BeforeMethod
     public void setUp() throws Exception {
-        provider = new SshMachineInstanceProvider(sshMachineFactory);
         machine = createMachine();
         SshMachineRecipe sshMachineRecipe = new SshMachineRecipe("localhost",
                                                                  22,
@@ -85,7 +90,7 @@ public class SshMachineInstanceProviderTest {
     public void shouldThrowMachineExceptionOnCreateInstanceFromSnapshot() throws Exception {
         InstanceKey instanceKey = () -> Collections.EMPTY_MAP;
 
-        provider.createInstance(instanceKey, null, null);
+        provider.createInstance(machine, instanceKey, null);
     }
 
     @Test(expectedExceptions = SnapshotException.class,
@@ -99,15 +104,16 @@ public class SshMachineInstanceProviderTest {
     public void shouldThrowExceptionOnDevMachineCreationFromRecipe() throws Exception {
         Machine machine = createMachine(true);
 
-        provider.createInstance(recipe, machine, LineConsumer.DEV_NULL);
+        provider.createInstance(machine, null, LineConsumer.DEV_NULL);
     }
 
     @Test
     public void shouldBeAbleToCreateSshMachineInstanceOnMachineCreationFromRecipe() throws Exception {
         when(sshMachineFactory.createSshClient(any(SshMachineRecipe.class), anyMap())).thenReturn(sshClient);
         when(sshMachineFactory.createInstance(eq(machine), eq(sshClient), any(LineConsumer.class))).thenReturn(sshMachineInstance);
+        when(recipeDownloader.getRecipe(eq(machine.getConfig()))).thenReturn(recipe);
 
-        Instance instance = provider.createInstance(recipe, machine, LineConsumer.DEV_NULL);
+        Instance instance = provider.createInstance(machine, null, LineConsumer.DEV_NULL);
 
         assertEquals(instance, sshMachineInstance);
     }

@@ -17,11 +17,14 @@ import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.machine.MachineConfig;
 import org.eclipse.che.api.core.model.machine.Recipe;
 import org.eclipse.che.api.core.util.LineConsumer;
+import org.eclipse.che.api.machine.server.exception.InvalidRecipeException;
 import org.eclipse.che.api.machine.server.exception.MachineException;
 import org.eclipse.che.api.machine.server.exception.SnapshotException;
+import org.eclipse.che.api.machine.server.exception.UnsupportedRecipeException;
 import org.eclipse.che.api.machine.server.spi.Instance;
 import org.eclipse.che.api.machine.server.spi.InstanceKey;
 import org.eclipse.che.api.machine.server.spi.InstanceProvider;
+import org.eclipse.che.api.machine.server.util.RecipeDownloader;
 
 import javax.inject.Inject;
 import java.io.IOException;
@@ -45,10 +48,12 @@ public class SshMachineInstanceProvider implements InstanceProvider {
 
     private final Set<String>       supportedRecipeTypes;
     private final SshMachineFactory sshMachineFactory;
+    private final RecipeDownloader  recipeDownloader;
 
     @Inject
-    public SshMachineInstanceProvider(SshMachineFactory sshMachineFactory) throws IOException {
+    public SshMachineInstanceProvider(SshMachineFactory sshMachineFactory, RecipeDownloader recipeDownloader) throws IOException {
         this.sshMachineFactory = sshMachineFactory;
+        this.recipeDownloader = recipeDownloader;
         this.supportedRecipeTypes = Collections.singleton("ssh-config");
     }
 
@@ -62,9 +67,36 @@ public class SshMachineInstanceProvider implements InstanceProvider {
         return supportedRecipeTypes;
     }
 
+    /**
+     * Creates instance from scratch or by reusing a previously one by using implementation specific {@link InstanceKey}.
+     *
+     * @param machine
+     *         machine description
+     * @param instanceKey
+     *         optional implementation specific {@link InstanceKey}
+     * @param creationLogsOutput
+     *         output for instance creation logs
+     * @return newly created {@link Instance}
+     * @throws UnsupportedRecipeException
+     *         if specified {@code recipe} is not supported
+     * @throws InvalidRecipeException
+     *         if {@code recipe} is invalid
+     * @throws NotFoundException
+     *         if instance described by {@code InstanceKey} doesn't exists
+     * @throws MachineException
+     *         if other error occurs
+     */
     @Override
-    public Instance createInstance(Recipe recipe,
-                                   Machine machine,
+    public Instance createInstance(Machine machine, InstanceKey instanceKey, LineConsumer creationLogsOutput)
+            throws UnsupportedRecipeException, InvalidRecipeException, NotFoundException, MachineException {
+        if (instanceKey != null) {
+            throw new MachineException("Snapshot feature is unsupported for ssh machine implementation");
+        } else {
+            return doCreateInstance(machine, creationLogsOutput);
+        }
+    }
+
+    public Instance doCreateInstance(Machine machine,
                                    LineConsumer machineLogsConsumer) throws MachineException {
         requireNonNull(machine, "Non null machine required");
         requireNonNull(machineLogsConsumer, "Non null logs consumer required");
@@ -73,6 +105,7 @@ public class SshMachineInstanceProvider implements InstanceProvider {
             throw new MachineException("Dev machine is not supported for Ssh machine implementation");
         }
 
+        Recipe recipe = recipeDownloader.getRecipe(machine.getConfig());
         SshMachineRecipe sshMachineRecipe = parseRecipe(recipe);
 
         SshClient sshClient = sshMachineFactory.createSshClient(sshMachineRecipe,
@@ -82,13 +115,6 @@ public class SshMachineInstanceProvider implements InstanceProvider {
         return sshMachineFactory.createInstance(machine,
                                                 sshClient,
                                                 machineLogsConsumer);
-    }
-
-    @Override
-    public Instance createInstance(InstanceKey instanceKey,
-                                   Machine machine,
-                                   LineConsumer creationLogsOutput) throws NotFoundException, MachineException {
-        throw new MachineException("Snapshot feature is unsupported for ssh machine implementation");
     }
 
     @Override

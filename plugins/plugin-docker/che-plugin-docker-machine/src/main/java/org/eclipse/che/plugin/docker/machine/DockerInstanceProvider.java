@@ -18,6 +18,8 @@ import com.google.inject.Inject;
 
 import org.eclipse.che.api.core.NotFoundException;
 import org.eclipse.che.api.core.model.machine.Machine;
+import org.eclipse.che.api.core.model.machine.MachineConfig;
+import org.eclipse.che.api.core.model.machine.MachineSource;
 import org.eclipse.che.api.core.model.machine.Recipe;
 import org.eclipse.che.api.core.model.machine.ServerConf;
 import org.eclipse.che.api.core.util.FileCleaner;
@@ -27,9 +29,11 @@ import org.eclipse.che.api.machine.server.exception.InvalidRecipeException;
 import org.eclipse.che.api.machine.server.exception.MachineException;
 import org.eclipse.che.api.machine.server.exception.SnapshotException;
 import org.eclipse.che.api.machine.server.exception.UnsupportedRecipeException;
+import org.eclipse.che.api.machine.server.recipe.RecipeImpl;
 import org.eclipse.che.api.machine.server.spi.Instance;
 import org.eclipse.che.api.machine.server.spi.InstanceKey;
 import org.eclipse.che.api.machine.server.spi.InstanceProvider;
+import org.eclipse.che.api.machine.server.util.RecipeRetriever;
 import org.eclipse.che.commons.annotation.Nullable;
 import org.eclipse.che.commons.env.EnvironmentContext;
 import org.eclipse.che.commons.lang.IoUtil;
@@ -65,6 +69,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
@@ -76,6 +81,21 @@ import static java.lang.String.format;
  */
 public class DockerInstanceProvider implements InstanceProvider {
     private static final Logger LOG = LoggerFactory.getLogger(DockerInstanceProvider.class);
+
+    /**
+     * dockerfile type support with recipe being a content of Dockerfile
+     */
+    public static final String DOCKER_FILE_TYPE = "dockerfile";
+
+    /**
+     * Prefix used for building Dockerfile from a docker image.
+     */
+    public static final String DOCKER_IMAGE_PREFIX = "FROM ";
+
+    /**
+     * image type support with recipe script being the name of the repository + image name
+     */
+    public static final String DOCKER_IMAGE_TYPE = "image";
 
     private final DockerConnector                  docker;
     private final DockerInstanceStopDetector       dockerInstanceStopDetector;
@@ -93,6 +113,7 @@ public class DockerInstanceProvider implements InstanceProvider {
     private final Set<String>                      commonMachineEnvVariables;
     private final String[]                         allMachinesExtraHosts;
     private final String                           projectFolderPath;
+    private final RecipeRetriever                  recipeRetriever;
 
     @Inject
     public DockerInstanceProvider(DockerConnector docker,
@@ -100,6 +121,7 @@ public class DockerInstanceProvider implements InstanceProvider {
                                   DockerMachineFactory dockerMachineFactory,
                                   DockerInstanceStopDetector dockerInstanceStopDetector,
                                   DockerContainerNameGenerator containerNameGenerator,
+                                  RecipeRetriever recipeRetriever,
                                   @Named("machine.docker.dev_machine.machine_servers") Set<ServerConf> devMachineServers,
                                   @Named("machine.docker.machine_servers") Set<ServerConf> allMachinesServers,
                                   @Named("machine.docker.dev_machine.machine_volumes") Set<String> devMachineSystemVolumes,
@@ -117,10 +139,11 @@ public class DockerInstanceProvider implements InstanceProvider {
         this.dockerMachineFactory = dockerMachineFactory;
         this.dockerInstanceStopDetector = dockerInstanceStopDetector;
         this.containerNameGenerator = containerNameGenerator;
+        this.recipeRetriever = recipeRetriever;
         this.workspaceFolderPathProvider = workspaceFolderPathProvider;
         this.doForcePullOnBuild = doForcePullOnBuild;
         this.privilegeMode = privilegeMode;
-        this.supportedRecipeTypes = Collections.singleton("dockerfile");
+        this.supportedRecipeTypes = Sets.newHashSet(DOCKER_FILE_TYPE, DOCKER_IMAGE_TYPE);
         this.projectFolderPath = projectFolderPath;
 
         allMachinesSystemVolumes = removeEmptyAndNullValues(allMachinesSystemVolumes);
@@ -213,10 +236,44 @@ public class DockerInstanceProvider implements InstanceProvider {
     }
 
     @Override
-    public Instance createInstance(Recipe recipe,
-                                   Machine machine,
-                                   LineConsumer creationLogsOutput) throws MachineException, UnsupportedRecipeException {
-        final Dockerfile dockerfile = parseRecipe(recipe);
+    public Instance createInstance(final Machine machine,
+                                   final InstanceKey instanceKey,
+                                   final LineConsumer creationLogsOutput) throws NotFoundException, MachineException, UnsupportedRecipeException {
+
+        if (instanceKey != null) {
+            return doCreateInstanceFromKey(instanceKey, machine, creationLogsOutput);
+        } else {
+            return doCreateInstance(machine, creationLogsOutput);
+        }
+    }
+
+
+     protected Instance doCreateInstance(final Machine machine,
+                                         final LineConsumer creationLogsOutput) throws MachineException, UnsupportedRecipeException {
+
+        // based on machine source, do the right steps
+         MachineConfig machineConfig = machine.getConfig();
+         MachineSource machineSource = machineConfig.getSource();
+         String type = machineSource.getType();
+
+         // get recipe
+         // - it's a dockerfile type:
+         //    - location defined : download this location and get script as recipe
+         //    - content defined  : use this content as recipe script
+         // - it's an image:
+         //    - use either location or content as image (registry:image-name:tag)
+         final Recipe recipe;
+         if (DOCKER_FILE_TYPE.equals(type)) {
+             recipe = this.recipeRetriever.getRecipe(machineConfig);
+         } else if (DOCKER_IMAGE_TYPE.equals(type)) {
+             recipe = new RecipeImpl()
+                     .withScript(DOCKER_IMAGE_PREFIX + firstNonNull(machineSource.getLocation(), machineSource.getContent()));
+         } else {
+             // not supported
+             throw new UnsupportedRecipeException("The type '" + type + "' is not supported");
+         }
+         final Dockerfile dockerfile = parseRecipe(recipe);
+
 
         final String userName = EnvironmentContext.getCurrent().getSubject().getUserName();
         final String machineContainerName = containerNameGenerator.generateContainerName(machine.getWorkspaceId(),
@@ -234,10 +291,10 @@ public class DockerInstanceProvider implements InstanceProvider {
                               creationLogsOutput);
     }
 
-    @Override
-    public Instance createInstance(InstanceKey instanceKey,
-                                   Machine machine,
-                                   LineConsumer creationLogsOutput) throws NotFoundException, MachineException {
+
+    protected Instance doCreateInstanceFromKey(final InstanceKey instanceKey,
+                                        final Machine machine,
+                                        final LineConsumer creationLogsOutput) throws NotFoundException, MachineException {
         final DockerInstanceKey dockerInstanceKey = new DockerInstanceKey(instanceKey);
 
         pullImage(dockerInstanceKey, creationLogsOutput);
