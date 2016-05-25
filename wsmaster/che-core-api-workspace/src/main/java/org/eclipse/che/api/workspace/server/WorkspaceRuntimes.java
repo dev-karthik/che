@@ -15,29 +15,35 @@ import com.google.common.annotations.VisibleForTesting;
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.NotFoundException;
 import org.eclipse.che.api.core.ServerException;
+import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.workspace.Environment;
 import org.eclipse.che.api.core.model.workspace.WorkspaceRuntime;
 import org.eclipse.che.api.core.model.workspace.WorkspaceStatus;
 import org.eclipse.che.api.core.notification.EventService;
-import org.eclipse.che.api.workspace.server.env.EnvironmentManager;
-import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentManager;
+import org.eclipse.che.api.machine.server.model.impl.MachineImpl;
+import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentEngine;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentEngine;
 import org.eclipse.che.api.workspace.server.model.impl.EnvironmentImpl;
 import org.eclipse.che.api.workspace.server.model.impl.WorkspaceImpl;
 import org.eclipse.che.api.workspace.server.model.impl.WorkspaceRuntimeImpl;
 import org.eclipse.che.api.workspace.shared.dto.event.WorkspaceStatusEvent;
 import org.eclipse.che.api.workspace.shared.dto.event.WorkspaceStatusEvent.EventType;
+import org.slf4j.Logger;
 
 import javax.annotation.PreDestroy;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static org.eclipse.che.dto.server.DtoFactory.newDto;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * Defines an internal API for managing {@link WorkspaceRuntimeImpl} instances.
@@ -56,18 +62,19 @@ import static org.eclipse.che.dto.server.DtoFactory.newDto;
  */
 @Singleton
 public class WorkspaceRuntimes {
+    private static final Logger LOG = getLogger(WorkspaceRuntimes.class);
 
     private final ReadWriteLock                  rwLock;
     private final Map<String, RuntimeDescriptor> descriptors;
     private final EventService                   eventService;
-    private final EnvironmentManager             envManager;
+    private final Map<String, EnvironmentEngine> envEngines;
 
     private volatile boolean isPreDestroyInvoked;
 
     @Inject
-    public WorkspaceRuntimes(EventService eventService, EnvironmentManager envManager) {
+    public WorkspaceRuntimes(EventService eventService, Map<String, EnvironmentEngine> envEngines) {
         this.eventService = eventService;
-        this.envManager = envManager;
+        this.envEngines = envEngines;
         this.descriptors = new HashMap<>();
         this.rwLock = new ReentrantReadWriteLock();
     }
@@ -126,10 +133,11 @@ public class WorkspaceRuntimes {
      * @throws ServerException
      *         when component {@link #isPreDestroyInvoked is stopped} or any
      *         other error occurs during environment start
-     * @see CheEnvironmentManager#start(String, Environment, boolean)
+     * @see EnvironmentEngine#start(String, Environment)
      * @see WorkspaceStatus#STARTING
      * @see WorkspaceStatus#RUNNING
      */
+    // todo recover
     public RuntimeDescriptor start(WorkspaceImpl workspace, String envName, boolean recover) throws ServerException,
                                                                                                     ConflictException,
                                                                                                     NotFoundException {
@@ -148,14 +156,41 @@ public class WorkspaceRuntimes {
                                                    workspace.getConfig().getName(),
                                                    descriptor.getRuntimeStatus()));
             }
-            descriptors.put(workspace.getId(), new RuntimeDescriptor(new WorkspaceRuntimeImpl(envName)));
-
-            // todo rework
-            envManagers.get(activeEnv.getType()).start(workspace.getId(), activeEnv, recover);
+            descriptors.put(workspace.getId(), new RuntimeDescriptor(new WorkspaceRuntimeImpl(envName, activeEnv.getType())));
         } finally {
             rwLock.writeLock().unlock();
         }
-        return get(workspace.getId());
+        EnvironmentEngine engine = envEngines.get(activeEnv.getType());
+        if (engine == null) {
+            throw new NotFoundException("Environment engine of type '" + activeEnv.getType() + "' is not found");
+        }
+        List<Machine> machines = engine.start(workspace.getId(), activeEnv);
+        List<MachineImpl> machinesImpls = machines.stream()
+                                                  .map(MachineImpl::new)
+                                                  .collect(Collectors.toList());
+        Optional<MachineImpl> devMachineOpt = machinesImpls.stream()
+                                                           .filter(machine -> machine.getConfig().isDev())
+                                                           .findAny();
+        if (!devMachineOpt.isPresent()) {
+            try {
+                engine.stop(workspace.getId());
+            } catch (Exception e) {
+                LOG.error(e.getLocalizedMessage(), e);
+            }
+            throw new ServerException("Environment " + envName +
+                                      " has booted but it doesn't contain dev machine. Environment has been stopped.");
+        } else {
+            rwLock.writeLock().lock();
+            try {
+                WorkspaceRuntimeImpl runtime = descriptors.get(workspace.getId()).getRuntime();
+
+                runtime.setMachines(machinesImpls);
+                runtime.setDevMachine(devMachineOpt.get());
+            } finally {
+                rwLock.writeLock().unlock();
+            }
+            return get(workspace.getId());
+        }
     }
 
     /**
@@ -184,7 +219,7 @@ public class WorkspaceRuntimes {
      *         when any error occurs during workspace stopping
      * @throws ConflictException
      *         when running workspace status is different from {@link WorkspaceStatus#RUNNING}
-     * @see CheEnvironmentManager#stop(String)
+     * @see CheEnvironmentEngine#stop(String)
      * @see WorkspaceStatus#STOPPING
      */
     public void stop(String workspaceId) throws NotFoundException, ServerException, ConflictException {
@@ -202,7 +237,7 @@ public class WorkspaceRuntimes {
                                                    descriptor.getRuntimeStatus()));
             }
             descriptor.setStopping();
-            envManagers.get().stop(workspaceId);
+            envEngines.get(descriptor.getRuntime().getEnvType()).stop(workspaceId);
         } finally {
             rwLock.writeLock().unlock();
         }
@@ -245,7 +280,7 @@ public class WorkspaceRuntimes {
 
     /**
      * Removes all descriptors from the in-memory storage, while
-     * {@link CheEnvironmentManager} is responsible for environment destroying.
+     * {@link CheEnvironmentEngine} is responsible for environment destroying.
      */
     @PreDestroy
     @VisibleForTesting

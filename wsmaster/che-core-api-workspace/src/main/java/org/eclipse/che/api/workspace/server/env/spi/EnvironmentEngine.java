@@ -8,17 +8,24 @@
  * Contributors:
  *   Codenvy, S.A. - initial API and implementation
  *******************************************************************************/
-package org.eclipse.che.api.workspace.server.env.impl.che;
+package org.eclipse.che.api.workspace.server.env.spi;
 
+import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.workspace.Environment;
-import org.eclipse.che.api.workspace.server.env.spi.EnvironmentValidator;
+
+import java.util.List;
 
 /**
  * author Alexander Garagatyi
  */
-public class CheEnvironmentValidator implements EnvironmentValidator {
-    @Override
-    public void validate(Environment env) {
+public interface EnvironmentEngine {
+    String getType();
 
-    }
+    // todo consider removal of env type from start method
+    // todo snapshot?
+    List<Machine> start(String workspaceId, Environment env);
+
+    void stop(String workspaceId);
+
+//    void startMachine();
 }

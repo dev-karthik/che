@@ -8,17 +8,25 @@
  * Contributors:
  *   Codenvy, S.A. - initial API and implementation
  *******************************************************************************/
-package org.eclipse.che.api.workspace.server.env.spi;
+package org.eclipse.che.api.workspace.server.env.impl.che;
 
-import com.google.inject.ImplementedBy;
-
+import org.eclipse.che.api.core.model.machine.MachineConfig;
 import org.eclipse.che.api.core.model.workspace.Environment;
-import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentValidator;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentParser;
+
+import java.util.List;
 
 /**
  * author Alexander Garagatyi
  */
-@ImplementedBy(CheEnvironmentValidator.class)
-public interface EnvironmentValidator {
-    void validate(Environment env);
+public class CheEnvironmentParser implements EnvironmentParser {
+    @Override
+    public void validate(Environment env) {
+
+    }
+
+    // todo change to new entity that contains network
+    public List<MachineConfig> parse(Environment env) {
+        return null;
+    }
 }

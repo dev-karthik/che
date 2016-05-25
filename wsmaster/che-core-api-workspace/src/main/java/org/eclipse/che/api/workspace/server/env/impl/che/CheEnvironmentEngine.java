@@ -17,6 +17,7 @@ import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.NotFoundException;
 import org.eclipse.che.api.core.ServerException;
+import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.machine.MachineConfig;
 import org.eclipse.che.api.core.model.workspace.Environment;
 import org.eclipse.che.api.core.model.workspace.WorkspaceStatus;
@@ -25,7 +26,7 @@ import org.eclipse.che.api.machine.server.exception.MachineException;
 import org.eclipse.che.api.machine.server.exception.SnapshotException;
 import org.eclipse.che.api.machine.server.model.impl.MachineConfigImpl;
 import org.eclipse.che.api.machine.server.model.impl.MachineImpl;
-import org.eclipse.che.api.workspace.server.env.EnvironmentManager;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentEngine;
 import org.eclipse.che.api.workspace.server.model.impl.WorkspaceRuntimeImpl;
 import org.eclipse.che.api.workspace.shared.dto.event.WorkspaceStatusEvent;
 
@@ -43,11 +44,11 @@ import static java.lang.String.format;
 /**
  * author Alexander Garagatyi
  */
-public class CheEnvironmentManager implements EnvironmentManager {
+public class CheEnvironmentEngine implements EnvironmentEngine {
     private final Map<String, Queue<MachineConfigImpl>> startQueues;
     private final MachineManager                        machineManager;
 
-    public CheEnvironmentManager(MachineManager machineManager) {
+    public CheEnvironmentEngine(MachineManager machineManager) {
         this.machineManager = machineManager;
         this.startQueues = new HashMap<>();
     }
@@ -78,13 +79,21 @@ public class CheEnvironmentManager implements EnvironmentManager {
 
 
 
-    public void start(String workspaceId, Environment env, boolean recover) {
-        // Dev machine goes first in the start queue
+    @Override
+    public List<Machine> start(String workspaceId, Environment env) {
         final List<? extends MachineConfig> machineConfigs = env.getMachineConfigs();
+
+        // Dev machine goes first in the start queue
+
         final MachineConfigImpl devCfg = rmFirst(machineConfigs, MachineConfig::isDev);
         machineConfigs.add(0, devCfg);
         startQueues.put(workspace.getId(), new ArrayDeque<>(machineConfigs));
         startQueue(workspace.getId(), activeEnv.getName(), recover);
+    }
+
+    @Override
+    public String getType() {
+        return "che";
     }
 
     public void stop(String workspaceId) {

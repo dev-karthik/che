@@ -10,21 +10,15 @@
  *******************************************************************************/
 package org.eclipse.che.api.workspace.server.env.spi;
 
-import org.eclipse.che.api.core.model.workspace.Environment;
+import com.google.inject.ImplementedBy;
 
-import java.util.Set;
+import org.eclipse.che.api.core.model.workspace.Environment;
+import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentParser;
 
 /**
  * author Alexander Garagatyi
  */
-public interface EnvironmentImplManager {
-    Set<String> getSupportedTypes();
-
-    void start(String workspaceId, Environment env, boolean recover);
-
-    void stop(String workspaceId);
-
-    void get();
-
-    void startMachine();
+@ImplementedBy(CheEnvironmentParser.class)
+public interface EnvironmentParser {
+    void validate(Environment env);
 }
