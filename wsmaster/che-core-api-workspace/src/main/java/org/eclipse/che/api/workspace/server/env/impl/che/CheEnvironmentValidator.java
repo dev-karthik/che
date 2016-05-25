@@ -12,14 +12,14 @@ package org.eclipse.che.api.workspace.server.env.impl.che;
 
 import org.eclipse.che.api.core.model.machine.MachineConfig;
 import org.eclipse.che.api.core.model.workspace.Environment;
-import org.eclipse.che.api.workspace.server.env.spi.EnvironmentParser;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentValidator;
 
 import java.util.List;
 
 /**
  * author Alexander Garagatyi
  */
-public class CheEnvironmentParser implements EnvironmentParser {
+public class CheEnvironmentValidator implements EnvironmentValidator {
     @Override
     public void validate(Environment env) {
 

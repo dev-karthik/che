@@ -13,12 +13,12 @@ package org.eclipse.che.api.workspace.server.env.spi;
 import com.google.inject.ImplementedBy;
 
 import org.eclipse.che.api.core.model.workspace.Environment;
-import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentParser;
+import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentValidator;
 
 /**
  * author Alexander Garagatyi
  */
-@ImplementedBy(CheEnvironmentParser.class)
-public interface EnvironmentParser {
+@ImplementedBy(CheEnvironmentValidator.class)
+public interface EnvironmentValidator {
     void validate(Environment env);
 }

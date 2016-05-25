@@ -10,6 +10,9 @@
  *******************************************************************************/
 package org.eclipse.che.api.workspace.server.env.spi;
 
+import org.eclipse.che.api.core.ConflictException;
+import org.eclipse.che.api.core.NotFoundException;
+import org.eclipse.che.api.core.ServerException;
 import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.workspace.Environment;
 
@@ -21,11 +24,9 @@ import java.util.List;
 public interface EnvironmentEngine {
     String getType();
 
-    // todo consider removal of env type from start method
-    // todo snapshot?
-    List<Machine> start(String workspaceId, Environment env);
+    List<Machine> start(String workspaceId, Environment env, boolean recover) throws ServerException,
+                                                                                     NotFoundException,
+                                                                                     ConflictException;
 
-    void stop(String workspaceId);
-
-//    void startMachine();
+    void stop(String workspaceId) throws NotFoundException, ServerException;
 }

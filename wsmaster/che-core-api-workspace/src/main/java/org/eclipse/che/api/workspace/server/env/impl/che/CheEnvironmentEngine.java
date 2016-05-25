@@ -11,7 +11,6 @@
 package org.eclipse.che.api.workspace.server.env.impl.che;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Predicate;
 
 import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.ConflictException;
@@ -20,15 +19,13 @@ import org.eclipse.che.api.core.ServerException;
 import org.eclipse.che.api.core.model.machine.Machine;
 import org.eclipse.che.api.core.model.machine.MachineConfig;
 import org.eclipse.che.api.core.model.workspace.Environment;
-import org.eclipse.che.api.core.model.workspace.WorkspaceStatus;
 import org.eclipse.che.api.machine.server.MachineManager;
 import org.eclipse.che.api.machine.server.exception.MachineException;
 import org.eclipse.che.api.machine.server.exception.SnapshotException;
 import org.eclipse.che.api.machine.server.model.impl.MachineConfigImpl;
 import org.eclipse.che.api.machine.server.model.impl.MachineImpl;
 import org.eclipse.che.api.workspace.server.env.spi.EnvironmentEngine;
-import org.eclipse.che.api.workspace.server.model.impl.WorkspaceRuntimeImpl;
-import org.eclipse.che.api.workspace.shared.dto.event.WorkspaceStatusEvent;
+import org.slf4j.Logger;
 
 import javax.annotation.PreDestroy;
 import java.util.ArrayDeque;
@@ -38,57 +35,32 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  * author Alexander Garagatyi
  */
 public class CheEnvironmentEngine implements EnvironmentEngine {
+    private static final Logger LOG = getLogger(CheEnvironmentEngine.class);
+
     private final Map<String, Queue<MachineConfigImpl>> startQueues;
     private final MachineManager                        machineManager;
+    private final CheEnvironmentValidator               cheEnvironmentValidator;
+    private final Map<String, List<MachineImpl>>        machines;
+    private final ReadWriteLock                         rwLock;
 
-    public CheEnvironmentEngine(MachineManager machineManager) {
+    public CheEnvironmentEngine(MachineManager machineManager, CheEnvironmentValidator cheEnvironmentValidator) {
         this.machineManager = machineManager;
+        this.cheEnvironmentValidator = cheEnvironmentValidator;
         this.startQueues = new HashMap<>();
-    }
-
-    /**
-    * Dev-machine always starts before the other machines.
-    * If dev-machine start failed then method will throw appropriate
-    * {@link ServerException}.
-     * * <p>If {@link #stop} method executed after dev machine is started but
-     * another machines haven't been started yet then {@link ConflictException}
-     * will be thrown and start process will be interrupted.
-     * */
-
-    /**
-     * <p>Stops all running machines one by one,
-     * non-dev machines first. During the stop of the workspace
-     * its runtime is accessible with {@link WorkspaceStatus#STOPPING stopping} status.
-     * Workspace may be stopped only if its status is {@link WorkspaceStatus#RUNNING}.
-     *
-     * <p>If workspace has runtime with dev-machine running
-     * and other machines starting then the runtime can still
-     * be stopped which will also interrupt starting process.
-     *
-     * <p>Note that it doesn't provide any events for machines stop,
-     * Machine API is responsible for it.
-     */
-
-
-
-
-    @Override
-    public List<Machine> start(String workspaceId, Environment env) {
-        final List<? extends MachineConfig> machineConfigs = env.getMachineConfigs();
-
-        // Dev machine goes first in the start queue
-
-        final MachineConfigImpl devCfg = rmFirst(machineConfigs, MachineConfig::isDev);
-        machineConfigs.add(0, devCfg);
-        startQueues.put(workspace.getId(), new ArrayDeque<>(machineConfigs));
-        startQueue(workspace.getId(), activeEnv.getName(), recover);
+        this.machines = new HashMap<>();
+        this.rwLock = new ReentrantReadWriteLock();
     }
 
     @Override
@@ -96,29 +68,94 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
         return "che";
     }
 
-    public void stop(String workspaceId) {
-// remove the workspace from the queue to prevent start
+    @Override
+    public List<Machine> start(String workspaceId, Environment env, boolean recover)
+            throws ServerException, NotFoundException, ConflictException {
+
+        // check old and new environment format
+        List<? extends MachineConfig> machineConfigs = env.getMachineConfigs();
+        if (machineConfigs == null) {
+            machineConfigs = cheEnvironmentValidator.parse(env);
+        }
+        if (machineConfigs == null) {
+            throw new IllegalArgumentException("Che machine environment " + env.getName() + " does not contain list of machines");
+        }
+
+        List<MachineConfigImpl> configs = machineConfigs.stream()
+                                                        .map(MachineConfigImpl::new)
+                                                        .collect(Collectors.toList());
+
+        // Dev machine goes first in the start queue
+        final MachineConfigImpl devCfg = rmFirst(configs, MachineConfigImpl::isDev);
+        configs.add(0, devCfg);
+        rwLock.writeLock().lock();
+        try {
+            startQueues.put(workspaceId, new ArrayDeque<>(configs));
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+        startQueue(workspaceId, env.getName(), recover);
+        rwLock.writeLock().lock();
+        List<MachineImpl> envMachines;
+        try {
+            envMachines = this.machines.get(workspaceId);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+        return toListOfMachines(envMachines);
+    }
+
+    @Override
+    public void stop(String workspaceId) throws NotFoundException, ServerException {
+        // remove the workspace from the queue to prevent start
         // of another not started machines(if such exist)
         startQueues.remove(workspaceId);
-        destroyRuntime(workspaceId, runtime);
+        List<MachineImpl> machines = this.machines.get(workspaceId);
+        if (machines != null && !machines.isEmpty()) {
+            destroyRuntime(workspaceId, machines);
+        }
     }
 
-    public void get() {
-
+    @VisibleForTesting
+    void cleanupStartResources(String workspaceId) {
+        rwLock.writeLock().lock();
+        try {
+            machines.remove(workspaceId);
+            startQueues.remove(workspaceId);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
     }
 
-    public void startMachine() {
+    @VisibleForTesting
+    void removeRuntime(String wsId) {
+        rwLock.writeLock().lock();
+        try {
+            machines.remove(wsId);
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
 
+    /**
+     * Removes all descriptors from the in-memory storage, while
+     * {@link MachineManager#cleanup()} is responsible for machines destroying.
+     */
+    @PreDestroy
+    @VisibleForTesting
+    void cleanup() {
+        startQueues.clear();
+    }
+
+    private List<Machine> toListOfMachines(List<MachineImpl> machineImpls) {
+        return machineImpls.stream()
+                           .collect(ArrayList::new, List::add, List::addAll);
     }
 
     /**
      * Stops workspace by destroying all its machines and removing it from in memory storage.
      */
-    // todo can we add machine to running environment? with compose
-    //
-    private void destroyRuntime(String wsId, WorkspaceRuntimeImpl workspace) throws NotFoundException, ServerException {
-        publishEvent(WorkspaceStatusEvent.EventType.STOPPING, wsId, null);
-        final List<MachineImpl> machines = new ArrayList<>(workspace.getMachines());
+    private void destroyRuntime(String wsId, List<MachineImpl> machines) throws NotFoundException, ServerException {
         final MachineImpl devMachine = rmFirst(machines, m -> m.getConfig().isDev());
         // destroying all non-dev machines
         for (MachineImpl machine : machines) {
@@ -136,12 +173,8 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
         // destroying dev-machine
         try {
             machineManager.destroy(devMachine.getId(), false);
-            publishEvent(WorkspaceStatusEvent.EventType.STOPPED, wsId, null);
         } catch (NotFoundException ignore) {
             // it is ok, machine has been already destroyed
-        } catch (RuntimeException | ServerException ex) {
-            publishEvent(WorkspaceStatusEvent.EventType.ERROR, wsId, ex.getLocalizedMessage());
-            throw ex;
         } finally {
             removeRuntime(wsId);
         }
@@ -150,7 +183,6 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
     private void startQueue(String wsId, String envName, boolean recover) throws ServerException,
                                                                                  NotFoundException,
                                                                                  ConflictException {
-        publishEvent(WorkspaceStatusEvent.EventType.STARTING, wsId, null);
         MachineConfigImpl config = getPeekConfig(wsId);
         while (config != null) {
             startMachine(config, wsId, envName, recover);
@@ -174,7 +206,6 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
         // start was interrupted either by the stop method, or by the cleanup
         rwLock.readLock().lock();
         try {
-            ensurePreDestroyIsNotExecuted();
             final Queue<MachineConfigImpl> queue = startQueues.get(wsId);
             if (queue == null) {
                 throw new ConflictException(format("Workspace '%s' start interrupted. " +
@@ -199,7 +230,6 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
             machine = createMachine(config, wsId, envName, recover);
         } catch (RuntimeException | MachineException | NotFoundException | SnapshotException | ConflictException ex) {
             if (config.isDev()) {
-                publishEvent(WorkspaceStatusEvent.EventType.ERROR, wsId, ex.getLocalizedMessage());
                 cleanupStartResources(wsId);
                 throw ex;
             }
@@ -218,18 +248,14 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
         boolean queuePolled = false;
         rwLock.readLock().lock();
         try {
-            ensurePreDestroyIsNotExecuted();
+//            ensurePreDestroyIsNotExecuted();
             final Queue<MachineConfigImpl> queue = startQueues.get(wsId);
             if (queue != null) {
                 queue.poll();
                 queuePolled = true;
                 if (machine != null) {
-                    final WorkspaceRuntimeImpl runtime = descriptors.get(wsId).getRuntime();
-                    if (config.isDev()) {
-                        runtime.setDevMachine(machine);
-                        publishEvent(WorkspaceStatusEvent.EventType.RUNNING, wsId, null);
-                    }
-                    runtime.getMachines().add(machine);
+                    List<MachineImpl> machines = this.machines.get(wsId);
+                    machines.add(machine);
                 }
             }
         } finally {
@@ -247,6 +273,18 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
                                                "Workspace was stopped before all its machines were started",
                                                wsId));
         }
+    }
+
+    private <T> T rmFirst(List<? extends T> elements, Predicate<T> predicate) {
+        T element = null;
+        for (final Iterator<? extends T> it = elements.iterator(); it.hasNext() && element == null; ) {
+            final T next = it.next();
+            if (predicate.test(next)) {
+                element = next;
+                it.remove();
+            }
+        }
+        return element;
     }
 
     /**
@@ -269,44 +307,5 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
             // TODO fix this in machineManager
             throw new IllegalArgumentException(brEx.getLocalizedMessage(), brEx);
         }
-    }
-
-    /**
-     * Removes all descriptors from the in-memory storage, while
-     * {@link MachineManager#cleanup()} is responsible for machines destroying.
-     */
-    @PreDestroy
-    @VisibleForTesting
-    void cleanup() {
-        isPreDestroyInvoked = true;
-        rwLock.writeLock().lock();
-        try {
-            startQueues.clear();
-        } finally {
-            rwLock.writeLock().unlock();
-        }
-    }
-
-    @VisibleForTesting
-    void cleanupStartResources(String workspaceId) {
-        rwLock.writeLock().lock();
-        try {
-            descriptors.remove(workspaceId);
-            startQueues.remove(workspaceId);
-        } finally {
-            rwLock.writeLock().unlock();
-        }
-    }
-
-    private <T> T rmFirst(List<? extends T> elements, Predicate<T> predicate) {
-        T element = null;
-        for (final Iterator<? extends T> it = elements.iterator(); it.hasNext() && element == null; ) {
-            final T next = it.next();
-            if (predicate.apply(next)) {
-                element = next;
-                it.remove();
-            }
-        }
-        return element;
     }
 }

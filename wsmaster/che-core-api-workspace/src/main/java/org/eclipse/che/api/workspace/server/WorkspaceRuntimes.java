@@ -133,7 +133,7 @@ public class WorkspaceRuntimes {
      * @throws ServerException
      *         when component {@link #isPreDestroyInvoked is stopped} or any
      *         other error occurs during environment start
-     * @see EnvironmentEngine#start(String, Environment)
+     * @see EnvironmentEngine#start(String, Environment, boolean)
      * @see WorkspaceStatus#STARTING
      * @see WorkspaceStatus#RUNNING
      */
@@ -146,10 +146,13 @@ public class WorkspaceRuntimes {
             throw new IllegalArgumentException("Environment with name " + envName + " not found");
         }
         final EnvironmentImpl activeEnv = new EnvironmentImpl(envOptional.get());
-        ensurePreDestroyIsNotExecuted();
+        EnvironmentEngine engine = envEngines.get(activeEnv.getType());
+        if (engine == null) {
+            throw new NotFoundException("Environment engine of type '" + activeEnv.getType() + "' is not found");
+        }
+
         rwLock.writeLock().lock();
         try {
-            ensurePreDestroyIsNotExecuted();
             final RuntimeDescriptor descriptor = descriptors.get(workspace.getId());
             if (descriptor != null) {
                 throw new ConflictException(format("Could not start workspace '%s' because its status is '%s'",
@@ -160,11 +163,11 @@ public class WorkspaceRuntimes {
         } finally {
             rwLock.writeLock().unlock();
         }
-        EnvironmentEngine engine = envEngines.get(activeEnv.getType());
-        if (engine == null) {
-            throw new NotFoundException("Environment engine of type '" + activeEnv.getType() + "' is not found");
-        }
-        List<Machine> machines = engine.start(workspace.getId(), activeEnv);
+
+        // todo should we declare that environment should start dev machine or not?
+        ensurePreDestroyIsNotExecuted();
+        publishEvent(EventType.STARTING, workspace.getId(), null);
+        List<Machine> machines = engine.start(workspace.getId(), activeEnv, recover);
         List<MachineImpl> machinesImpls = machines.stream()
                                                   .map(MachineImpl::new)
                                                   .collect(Collectors.toList());
@@ -172,6 +175,9 @@ public class WorkspaceRuntimes {
                                                            .filter(machine -> machine.getConfig().isDev())
                                                            .findAny();
         if (!devMachineOpt.isPresent()) {
+            publishEvent(EventType.ERROR,
+                         workspace.getId(),
+                         "Environment " + envName + " has booted but it doesn't contain dev machine. Environment has been stopped.");
             try {
                 engine.stop(workspace.getId());
             } catch (Exception e) {
@@ -180,6 +186,7 @@ public class WorkspaceRuntimes {
             throw new ServerException("Environment " + envName +
                                       " has booted but it doesn't contain dev machine. Environment has been stopped.");
         } else {
+            publishEvent(EventType.RUNNING, workspace.getId(), null);
             rwLock.writeLock().lock();
             try {
                 WorkspaceRuntimeImpl runtime = descriptors.get(workspace.getId()).getRuntime();
@@ -223,6 +230,7 @@ public class WorkspaceRuntimes {
      * @see WorkspaceStatus#STOPPING
      */
     public void stop(String workspaceId) throws NotFoundException, ServerException, ConflictException {
+        EnvironmentEngine engine;
         ensurePreDestroyIsNotExecuted();
         rwLock.writeLock().lock();
         try {
@@ -237,9 +245,21 @@ public class WorkspaceRuntimes {
                                                    descriptor.getRuntimeStatus()));
             }
             descriptor.setStopping();
-            envEngines.get(descriptor.getRuntime().getEnvType()).stop(workspaceId);
+            engine = envEngines.get(descriptor.getRuntime().getEnvType());
         } finally {
             rwLock.writeLock().unlock();
+        }
+
+        publishEvent(EventType.STOPPING, workspaceId, null);
+        try {
+            engine.stop(workspaceId);
+            publishEvent(EventType.STOPPED, workspaceId, null);
+        } catch (NotFoundException e) {
+            // it is ok, machine has been already destroyed
+        } catch (ServerException | RuntimeException e) {
+            publishEvent(EventType.ERROR, workspaceId, e.getLocalizedMessage());
+        } finally {
+            removeRuntime(workspaceId);
         }
     }
 
@@ -286,6 +306,7 @@ public class WorkspaceRuntimes {
     @VisibleForTesting
     void cleanup() {
         isPreDestroyInvoked = true;
+        // todo stop environments
         rwLock.writeLock().lock();
         try {
             descriptors.clear();

@@ -20,7 +20,7 @@ import org.eclipse.che.api.core.model.workspace.Environment;
 import org.eclipse.che.api.core.model.workspace.Workspace;
 import org.eclipse.che.api.core.model.workspace.WorkspaceConfig;
 import org.eclipse.che.api.machine.server.MachineInstanceProviders;
-import org.eclipse.che.api.workspace.server.env.spi.EnvironmentParser;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentValidator;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -42,12 +42,12 @@ public class DefaultWorkspaceValidator implements WorkspaceValidator {
     private static final Pattern SERVER_PORT     = Pattern.compile("[1-9]+[0-9]*/(?:tcp|udp)");
     private static final Pattern SERVER_PROTOCOL = Pattern.compile("[a-z][a-z0-9-+.]*");
 
-    private final MachineInstanceProviders       machineInstanceProviders;
-    private final Map<String, EnvironmentParser> envValidators;
+    private final MachineInstanceProviders          machineInstanceProviders;
+    private final Map<String, EnvironmentValidator> envValidators;
     
     @Inject
     public DefaultWorkspaceValidator(MachineInstanceProviders machineInstanceProviders,
-                                     Map<String, EnvironmentParser> envValidators) {
+                                     Map<String, EnvironmentValidator> envValidators) {
         this.machineInstanceProviders = machineInstanceProviders;
         this.envValidators = envValidators;
     }
