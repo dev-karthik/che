@@ -199,7 +199,7 @@ public class DockerInstance extends AbstractInstance {
                 final String digest = saveInRegistry(owner, repository, tag);
                 return new DockerInstanceKey(repository, tag, registry, digest);
             } else {
-                createImage(owner, repository, tag);
+                saveLocally(owner, repository, tag);
                 return new DockerInstanceKey(repository, tag);
             }
         } catch (IOException ioEx) {
@@ -214,7 +214,7 @@ public class DockerInstance extends AbstractInstance {
                                                                                       IOException,
                                                                                       InterruptedException {
         final String repositoryName = registry + '/' + repository;
-        createImage(owner, repositoryName, tag);
+        saveLocally(owner, repositoryName, tag);
         //TODO fix this workaround. Docker image is not visible after commit when using swarm
         Thread.sleep(2000);
         final ProgressLineFormatterImpl lineFormatter = new ProgressLineFormatterImpl();
@@ -232,7 +232,7 @@ public class DockerInstance extends AbstractInstance {
     }
 
     @VisibleForTesting
-    String createImage(String owner, String repository, String tag) throws IOException {
+    String saveLocally(String owner, String repository, String tag) throws IOException {
         String comment = format("Suspended at %1$ta %1$tb %1$td %1$tT %1$tZ %1$tY",
                                 System.currentTimeMillis());
         comment = owner == null ? comment : comment + " by " + owner;

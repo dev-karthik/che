@@ -138,7 +138,7 @@ public class DockerInstanceTest {
         final String digest = "image12";
         when(dockerConnectorMock.commit(any(CommitParams.class))).thenReturn(digest);
 
-        assertEquals(digest, dockerInstance.createImage(OWNER, REPOSITORY, TAG));
+        assertEquals(digest, dockerInstance.saveLocally(OWNER, REPOSITORY, TAG));
     }
 
     @Test
