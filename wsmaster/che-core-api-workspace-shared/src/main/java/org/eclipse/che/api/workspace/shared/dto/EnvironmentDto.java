@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.eclipse.che.api.core.factory.FactoryParameter.Obligation.MANDATORY;
 import static org.eclipse.che.api.core.factory.FactoryParameter.Obligation.OPTIONAL;
+import static org.eclipse.che.api.core.factory.FactoryParameter.Version.V4_0;
 
 /**
  * @author Alexander Garagatyi
@@ -35,17 +36,21 @@ public interface EnvironmentDto extends Environment {
     @Deprecated
     RecipeDto getRecipe();
 
+    @Deprecated
     void setRecipe(RecipeDto recipe);
 
+    @Deprecated
     EnvironmentDto withRecipe(RecipeDto recipe);
 
     @Override
-    @FactoryParameter(obligation = MANDATORY)
+    @FactoryParameter(obligation = MANDATORY, deprecatedSince = V4_0)
     @Deprecated
     List<MachineConfigDto> getMachineConfigs();
 
+    @Deprecated
     EnvironmentDto withMachineConfigs(List<MachineConfigDto> machineConfigs);
 
+    @Deprecated
     void setMachineConfigs(List<MachineConfigDto> machineConfigs);
 
     @Override
@@ -56,6 +61,8 @@ public interface EnvironmentDto extends Environment {
 
     EnvironmentDto withType(String type);
 
+    // todo added since?
+    // todo custom validator?
     @Override
     @FactoryParameter(obligation = MANDATORY)
     String getConfig();

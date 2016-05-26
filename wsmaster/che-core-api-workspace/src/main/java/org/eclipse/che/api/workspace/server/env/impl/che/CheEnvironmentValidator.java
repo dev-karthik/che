@@ -11,7 +11,7 @@
 package org.eclipse.che.api.workspace.server.env.impl.che;
 
 import com.google.common.base.Joiner;
-import com.google.gson.reflect.TypeToken;
+import com.google.common.reflect.TypeToken;
 
 import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.model.machine.MachineConfig;
@@ -81,10 +81,11 @@ public class CheEnvironmentValidator implements EnvironmentValidator {
         if (env.getConfig() != null) {
             // validate new format
             try {
-                machines = JsonHelper.fromJson(env.getConfig(), List.class, new TypeToken<List<? extends MachineConfig>>() {}.getType());
+                machines = JsonHelper.fromJson(env.getConfig(), List.class, new TypeToken<List<MachineConfig>>() {}.getType());
             } catch (JsonParseException e) {
                 throw new IllegalArgumentException("Parsing of environment configuration failed. " + e.getLocalizedMessage());
             }
+//            machines = new ArrayList<>();
         } else {
             machines = env.getMachineConfigs();
         }

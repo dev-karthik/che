@@ -11,6 +11,7 @@
 package org.eclipse.che.api.workspace.server;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 
 import org.eclipse.che.api.core.ConflictException;
 import org.eclipse.che.api.core.NotFoundException;
@@ -37,6 +38,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
@@ -96,7 +100,6 @@ public class WorkspaceRuntimes {
      * @throws NotFoundException
      *         when workspace with given {@code workspaceId} doesn't have runtime
      */
-    // todo should we get env machines from env manager on each get or only once?
     public RuntimeDescriptor get(String workspaceId) throws NotFoundException {
         rwLock.readLock().lock();
         try {
@@ -137,7 +140,6 @@ public class WorkspaceRuntimes {
      * @see WorkspaceStatus#STARTING
      * @see WorkspaceStatus#RUNNING
      */
-    // todo recover
     public RuntimeDescriptor start(WorkspaceImpl workspace, String envName, boolean recover) throws ServerException,
                                                                                                     ConflictException,
                                                                                                     NotFoundException {
@@ -146,6 +148,10 @@ public class WorkspaceRuntimes {
             throw new IllegalArgumentException("Environment with name " + envName + " not found");
         }
         final EnvironmentImpl activeEnv = new EnvironmentImpl(envOptional.get());
+        // todo update all existing environments with type 'che'
+        if (activeEnv.getType() == null) {
+            activeEnv.setType("che");
+        }
         EnvironmentEngine engine = envEngines.get(activeEnv.getType());
         if (engine == null) {
             throw new NotFoundException("Environment engine of type '" + activeEnv.getType() + "' is not found");
@@ -231,7 +237,6 @@ public class WorkspaceRuntimes {
      */
     public void stop(String workspaceId) throws NotFoundException, ServerException, ConflictException {
         EnvironmentEngine engine;
-        ensurePreDestroyIsNotExecuted();
         rwLock.writeLock().lock();
         try {
             ensurePreDestroyIsNotExecuted();
@@ -254,9 +259,7 @@ public class WorkspaceRuntimes {
         try {
             engine.stop(workspaceId);
             publishEvent(EventType.STOPPED, workspaceId, null);
-        } catch (NotFoundException e) {
-            // it is ok, machine has been already destroyed
-        } catch (ServerException | RuntimeException e) {
+        } catch (NotFoundException | ServerException | RuntimeException e) {
             publishEvent(EventType.ERROR, workspaceId, e.getLocalizedMessage());
         } finally {
             removeRuntime(workspaceId);
@@ -306,17 +309,43 @@ public class WorkspaceRuntimes {
     @VisibleForTesting
     void cleanup() {
         isPreDestroyInvoked = true;
-        // todo stop environments
+        final ExecutorService stopEnvExecutor =
+                Executors.newFixedThreadPool(2 * Runtime.getRuntime().availableProcessors(),
+                                             new ThreadFactoryBuilder().setNameFormat("StopEnvironment-%d")
+                                                                       .setDaemon(false)
+                                                                       .build());
         rwLock.writeLock().lock();
+        // todo inside lock or outside?
         try {
+
+            for (Map.Entry<String, RuntimeDescriptor> descriptorEntry : descriptors.entrySet()) {
+                if (descriptorEntry.getValue().getRuntimeStatus().equals(WorkspaceStatus.RUNNING) ||
+                    descriptorEntry.getValue().getRuntimeStatus().equals(WorkspaceStatus.RUNNING)) {
+                    envEngines.get(descriptorEntry.getValue().getRuntime().getEnvType()).stop(descriptorEntry.getKey());
+                }
+            }
+
             descriptors.clear();
+
+            stopEnvExecutor.shutdown();
+            if (!stopEnvExecutor.awaitTermination(50, TimeUnit.SECONDS)) {
+                stopEnvExecutor.shutdownNow();
+                if (!stopEnvExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+                    LOG.warn("Unable terminate destroy machines pool");
+                }
+            }
+        } catch (NotFoundException ignore) {
+        } catch (ServerException e) {
+            LOG.error(e.getLocalizedMessage(), e);
+        } catch (InterruptedException e) {
+            stopEnvExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         } finally {
             rwLock.writeLock().unlock();
         }
     }
 
     @VisibleForTesting
-        //todo
     void publishEvent(EventType type, String workspaceId, String error) {
         eventService.publish(newDto(WorkspaceStatusEvent.class)
                                      .withEventType(type)
@@ -335,7 +364,6 @@ public class WorkspaceRuntimes {
     }
 
     @VisibleForTesting
-        //todo
     void removeRuntime(String wsId) {
         rwLock.writeLock().lock();
         try {

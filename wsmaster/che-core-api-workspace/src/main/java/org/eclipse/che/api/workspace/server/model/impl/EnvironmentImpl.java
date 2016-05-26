@@ -102,6 +102,10 @@ public class EnvironmentImpl implements Environment {
         return type;
     }
 
+    public void setType(String type) {
+        this.type = type;
+    }
+
     @Override
     public String getConfig() {
         return config;
