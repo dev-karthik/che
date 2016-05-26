@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.che.api.workspace.server.env.spi;
 
+import org.eclipse.che.api.core.BadRequestException;
 import org.eclipse.che.api.core.model.workspace.Environment;
 
 /**
@@ -18,5 +19,5 @@ import org.eclipse.che.api.core.model.workspace.Environment;
 public interface EnvironmentValidator {
     String getType();
 
-    void validate(Environment env);
+    void validate(Environment env) throws BadRequestException;
 }

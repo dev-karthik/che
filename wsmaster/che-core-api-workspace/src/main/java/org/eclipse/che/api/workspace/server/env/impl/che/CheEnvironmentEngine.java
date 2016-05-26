@@ -72,16 +72,10 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
 
     @Override
     public List<Machine> start(String workspaceId, Environment env, boolean recover)
-            throws ServerException, NotFoundException, ConflictException {
+            throws ServerException, NotFoundException, ConflictException, IllegalArgumentException {
 
         // check old and new environment format
-        List<? extends MachineConfig> machineConfigs = env.getMachineConfigs();
-        if (machineConfigs == null) {
-            machineConfigs = cheEnvironmentValidator.parse(env);
-        }
-        if (machineConfigs == null) {
-            throw new IllegalArgumentException("Che machine environment " + env.getName() + " does not contain list of machines");
-        }
+        List<? extends MachineConfig> machineConfigs = cheEnvironmentValidator.parse(env);
 
         List<MachineConfigImpl> configs = machineConfigs.stream()
                                                         .map(MachineConfigImpl::new)
