@@ -10,6 +10,7 @@
  *******************************************************************************/
 package org.eclipse.che.api.git;
 
+import org.testng.annotations.DataProvider;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertFalse;
@@ -22,29 +23,39 @@ import static org.testng.Assert.assertTrue;
  */
 public class GitUrlUtilsTest {
 
-    @Test
-    public void shouldReturnTrueIfGivenUrlIsSsh() throws Exception {
-        assertTrue(GitUrlUtils.isSSH("ssh://user@host.xz:port/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://user@host.xz/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://host.xz:port/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://host.xz/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://user@host.xz/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://host.xz/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://user@host.xz/~user/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://host.xz/~user/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://user@host.xz/~/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh://host.xz/~/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("user@host.xz:/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("user@host.xz:path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("git://host.xz/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("git://host.xz/~user/path/to/repo.git"));
-        assertTrue(GitUrlUtils.isSSH("git@vcsProvider.com:user/test.git"));
-        assertTrue(GitUrlUtils.isSSH("ssh@vcsProvider.com:user/test.git"));
+    @DataProvider(name = "validGitSshUrlsProvider")
+    public static Object[][] validGitSshUrls() {
+        return new Object[][]{{"ssh://user@host.xz:port/path/to/repo.git"},
+                              {"ssh://user@host.xz/path/to/repo.git"},
+                              {"ssh://host.xz:port/path/to/repo.git"},
+                              {"ssh://host.xz/path/to/repo.git"},
+                              {"ssh://user@host.xz/path/to/repo.git"},
+                              {"ssh://host.xz/path/to/repo.git"},
+                              {"ssh://user@host.xz/~user/path/to/repo.git"},
+                              {"ssh://host.xz/~user/path/to/repo.git"},
+                              {"ssh://user@host.xz/~/path/to/repo.git"},
+                              {"ssh://host.xz/~/path/to/repo.git"},
+                              {"user@host.xz:/path/to/repo.git"},
+                              {"user@host.xz:path/to/repo.git"},
+                              {"git://host.xz/path/to/repo.git"},
+                              {"git://host.xz/~user/path/to/repo.git"},
+                              {"git@vcsProvider.com:user/test.git"},
+                              {"ssh@vcsProvider.com:user/test.git"}};
     }
 
-    @Test
-    public void shouldReturnFalseIfGivenUrlIsNotSsh() throws Exception {
-        assertFalse(GitUrlUtils.isSSH("http://host.xz/path/to/repo.git"));
-        assertFalse(GitUrlUtils.isSSH("https://host.xz/path/to/repo.git"));
+    @DataProvider(name = "otherGitUrlsProvider")
+    public static Object[][] otherGitUrls() {
+        return new Object[][]{{"http://host.xz/path/to/repo.git"},
+                              {"https://host.xz/path/to/repo.git"}};
+    }
+
+    @Test(dataProvider = "validGitSshUrls")
+    public void shouldReturnTrueIfGivenUrlIsSsh(String url) throws Exception {
+        assertTrue(GitUrlUtils.isSSH(url));
+    }
+
+    @Test(dataProvider = "otherGitUrls")
+    public void shouldReturnFalseIfGivenUrlIsNotSsh(String url) throws Exception {
+        assertFalse(GitUrlUtils.isSSH(url));
     }
 }
