@@ -78,7 +78,7 @@ public class DockerInstanceProviderTest {
     private static final String  USER_TOKEN          = "userToken";
     private static final String  USER_NAME           = "user";
     private static final int     MEMORY_LIMIT_MB     = 64;
-    private static final boolean locallySnapshot     = true;
+    private static final boolean snapshotUseRegistry = true;
 
     @Mock
     private DockerConnector dockerConnector;
@@ -126,7 +126,7 @@ public class DockerInstanceProviderTest {
                                                                 false,
                                                                 Collections.emptySet(),
                                                                 Collections.emptySet(),
-                                                                locallySnapshot));
+                                                                snapshotUseRegistry));
 
         EnvironmentContext envCont = new EnvironmentContext();
         envCont.setSubject(new SubjectImpl(USER_NAME, "userId", USER_TOKEN, null, false));
@@ -265,7 +265,7 @@ public class DockerInstanceProviderTest {
                                                                 true,
                                                                 Collections.emptySet(),
                                                                 Collections.emptySet(),
-                                                                locallySnapshot));
+                                                                snapshotUseRegistry));
 
         createInstanceFromRecipe();
 
@@ -479,7 +479,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -518,7 +518,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -563,7 +563,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -602,7 +602,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -642,7 +642,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -685,7 +685,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -728,7 +728,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -771,7 +771,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -809,7 +809,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(workspaceFolderPathProvider.getPath(anyString())).thenReturn(expectedHostPathOfProjects);
 
@@ -847,7 +847,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(workspaceFolderPathProvider.getPath(anyString())).thenReturn(expectedHostPathOfProjects);
 
@@ -884,7 +884,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn("/tmp/projects");
 
@@ -921,7 +921,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn("/tmp/projects");
 
@@ -965,7 +965,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(workspaceFolderPathProvider.getPath(anyString())).thenReturn(expectedHostPathOfProjects);
         final boolean isDev = true;
@@ -1010,7 +1010,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(workspaceFolderPathProvider.getPath(anyString())).thenReturn(expectedHostPathOfProjects);
 
@@ -1054,7 +1054,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
 
@@ -1096,7 +1096,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
 
@@ -1138,7 +1138,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
         final boolean isDev = true;
@@ -1180,7 +1180,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
 
@@ -1222,7 +1222,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
         final boolean isDev = false;
@@ -1266,7 +1266,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         when(dockerNode.getProjectsFolder()).thenReturn(expectedHostPathOfProjects);
 
@@ -1379,7 +1379,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             devEnv,
                                                             commonEnv,
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -1413,7 +1413,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             devEnv,
                                                             commonEnv,
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -1452,7 +1452,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             devEnv,
                                                             commonEnv,
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -1486,7 +1486,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             devEnv,
                                                             commonEnv,
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -1522,7 +1522,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -1566,7 +1566,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
@@ -1610,7 +1610,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = false;
 
@@ -1654,7 +1654,7 @@ public class DockerInstanceProviderTest {
                                                             false,
                                                             Collections.emptySet(),
                                                             Collections.emptySet(),
-                                                            locallySnapshot);
+                                                            snapshotUseRegistry);
 
         final boolean isDev = true;
 
