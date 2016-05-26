@@ -20,6 +20,10 @@ import java.util.List;
  * author Alexander Garagatyi
  */
 public class CheEnvironmentValidator implements EnvironmentValidator {
+    public String getType() {
+        return CheEnvironmentEngine.ENVIRONMENT_TYPE;
+    }
+
     @Override
     public void validate(Environment env) {
 

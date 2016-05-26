@@ -11,7 +11,12 @@
 package org.eclipse.che.api.workspace.server.env;
 
 import com.google.inject.AbstractModule;
-import com.google.inject.multibindings.Multibinder;
+import com.google.inject.multibindings.MapBinder;
+
+import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentEngine;
+import org.eclipse.che.api.workspace.server.env.impl.che.CheEnvironmentValidator;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentEngine;
+import org.eclipse.che.api.workspace.server.env.spi.EnvironmentValidator;
 
 /**
  * author Alexander Garagatyi
@@ -19,6 +24,12 @@ import com.google.inject.multibindings.Multibinder;
 public class EnvironmentModule extends AbstractModule {
     @Override
     protected void configure() {
-        Multibinder<EnvironmentManager> envManagers = Multibinder.newSetBinder(binder(), EnvironmentManager.class);
+        MapBinder<String, EnvironmentEngine> engines =
+                MapBinder.newMapBinder(binder(), String.class, EnvironmentEngine.class);
+        engines.addBinding(CheEnvironmentEngine.ENVIRONMENT_TYPE).to(CheEnvironmentEngine.class);
+
+        MapBinder<String, EnvironmentValidator> validators =
+                MapBinder.newMapBinder(binder(), String.class, EnvironmentValidator.class);
+        validators.addBinding(CheEnvironmentEngine.ENVIRONMENT_TYPE).to(CheEnvironmentValidator.class);
     }
 }

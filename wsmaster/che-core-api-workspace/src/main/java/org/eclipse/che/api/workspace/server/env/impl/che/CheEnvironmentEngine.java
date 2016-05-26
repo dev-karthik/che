@@ -47,6 +47,8 @@ import static org.slf4j.LoggerFactory.getLogger;
  * author Alexander Garagatyi
  */
 public class CheEnvironmentEngine implements EnvironmentEngine {
+    public final static String ENVIRONMENT_TYPE= "che";
+
     private static final Logger LOG = getLogger(CheEnvironmentEngine.class);
 
     private final Map<String, Queue<MachineConfigImpl>> startQueues;
@@ -65,7 +67,7 @@ public class CheEnvironmentEngine implements EnvironmentEngine {
 
     @Override
     public String getType() {
-        return "che";
+        return ENVIRONMENT_TYPE;
     }
 
     @Override
