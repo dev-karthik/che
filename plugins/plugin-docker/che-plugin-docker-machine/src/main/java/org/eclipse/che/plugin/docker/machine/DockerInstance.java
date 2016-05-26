@@ -195,13 +195,26 @@ public class DockerInstance extends AbstractInstance {
         try {
             final String repository = generateRepository();
             final String tag = "latest";
-            if (snapshotUseRegistry) {
-                final String digest = saveInRegistry(owner, repository, tag);
-                return new DockerInstanceKey(repository, tag, registry, digest);
-            } else {
-                saveLocally(owner, repository, tag);
+            if(!snapshotUseRegistry) {
+                commitContainer(owner, repository, tag);
                 return new DockerInstanceKey(repository, tag);
             }
+            final String repositoryName = registry + '/' + repository;
+            commitContainer(owner, repositoryName, tag);
+            //TODO fix this workaround. Docker image is not visible after commit when using swarm
+            Thread.sleep(2000);
+            final ProgressLineFormatterImpl lineFormatter = new ProgressLineFormatterImpl();
+            final String digest = docker.push(PushParams.create(repository)
+                                                        .withTag(tag)
+                                                        .withRegistry(registry),
+                                              progressMonitor -> {
+                                                  try {
+                                                      outputConsumer.writeLine(lineFormatter.format(progressMonitor));
+                                                  } catch (IOException ignored) {
+                                                  }
+                                              });
+            docker.removeImage(RemoveImageParams.create(repositoryName).withForce(false));
+            return new DockerInstanceKey(repository, tag, registry, digest);
         } catch (IOException ioEx) {
             throw new MachineException(ioEx);
         } catch (InterruptedException e) {
@@ -210,38 +223,17 @@ public class DockerInstance extends AbstractInstance {
         }
     }
 
-    private String saveInRegistry(String owner, String repository, String tag) throws MachineException,
-                                                                                      IOException,
-                                                                                      InterruptedException {
-        final String repositoryName = registry + '/' + repository;
-        saveLocally(owner, repositoryName, tag);
-        //TODO fix this workaround. Docker image is not visible after commit when using swarm
-        Thread.sleep(2000);
-        final ProgressLineFormatterImpl lineFormatter = new ProgressLineFormatterImpl();
-        final String digest = docker.push(PushParams.create(repository)
-                                                    .withTag(tag)
-                                                    .withRegistry(registry),
-                                          progressMonitor -> {
-                                              try {
-                                                  outputConsumer.writeLine(lineFormatter.format(progressMonitor));
-                                              } catch (IOException ignored) {
-                                              }
-                                          });
-        docker.removeImage(RemoveImageParams.create(repositoryName).withForce(false));
-        return digest;
-    }
-
     @VisibleForTesting
-    String saveLocally(String owner, String repository, String tag) throws IOException {
+    void commitContainer(String owner, String repository, String tag) throws IOException {
         String comment = format("Suspended at %1$ta %1$tb %1$td %1$tT %1$tZ %1$tY",
                                 System.currentTimeMillis());
         comment = owner == null ? comment : comment + " by " + owner;
         // !! We SHOULD NOT pause container before commit because all execs will fail
         // to push image to private registry it should be tagged with registry in repo name
         // https://docs.docker.com/reference/api/docker_remote_api_v1.16/#push-an-image-on-the-registry
-        return docker.commit(CommitParams.create(container, repository)
-                                         .withTag(tag)
-                                         .withComment(comment));
+        docker.commit(CommitParams.create(container, repository)
+                                  .withTag(tag)
+                                  .withComment(comment));
     }
 
     private String generateRepository() {

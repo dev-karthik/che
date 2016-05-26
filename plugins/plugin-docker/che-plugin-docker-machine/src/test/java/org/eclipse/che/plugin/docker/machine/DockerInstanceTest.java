@@ -36,12 +36,15 @@ import org.testng.annotations.Test;
 
 import java.io.IOException;
 
+import static java.lang.String.format;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.anyVararg;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -135,10 +138,14 @@ public class DockerInstanceTest {
 
     @Test
     public void shouldCreateDockerImageLocally() throws Exception {
-        final String digest = "image12";
-        when(dockerConnectorMock.commit(any(CommitParams.class))).thenReturn(digest);
+        final String comment = format("Suspended at %1$ta %1$tb %1$td %1$tT %1$tZ %1$tY",
+                                      System.currentTimeMillis()) + " by " + OWNER;
 
-        assertEquals(digest, dockerInstance.saveLocally(OWNER, REPOSITORY, TAG));
+        dockerInstance.commitContainer(OWNER, REPOSITORY, TAG);
+
+        verify(dockerConnectorMock, times(1)).commit(CommitParams.create(CONTAINER, REPOSITORY)
+                                                                 .withTag(TAG)
+                                                                 .withComment(comment));
     }
 
     @Test
