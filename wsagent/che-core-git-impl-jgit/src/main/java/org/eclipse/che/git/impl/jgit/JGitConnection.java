@@ -407,7 +407,7 @@ class JGitConnection implements GitConnection {
             Branch branch = newDto(Branch.class).withName(branchName)
                                                 .withActive(isCommitOrTag || refName.equals(currentRef))
                                                 .withDisplayName(branchDisplayName)
-                                                .withRemote(ref.getName().startsWith("refs/remotes"));
+                                                .withRemote(refName.startsWith("refs/remotes"));
             branches.add(branch);
         }
         return branches;
