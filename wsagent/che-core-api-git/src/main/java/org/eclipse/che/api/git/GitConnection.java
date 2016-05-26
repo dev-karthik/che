@@ -90,7 +90,7 @@ public interface GitConnection extends Closeable {
     void checkout(CheckoutRequest request) throws GitException;
 
     /**
-     * Perform clone with space-checkout to specified directory.
+     * Perform clone with sparse-checkout to specified directory.
      *
      * @param directory
      *         path to keep in working tree

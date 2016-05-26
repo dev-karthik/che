@@ -366,17 +366,15 @@ class JGitConnection implements GitConnection {
     @Override
     public List<Branch> branchList(BranchListRequest request) throws GitException {
         String listMode = request.getListMode();
-        if (!(listMode == null || listMode.equals(BranchListRequest.LIST_ALL) || listMode.equals(BranchListRequest.LIST_REMOTE))) {
+        if (listMode != null && !BranchListRequest.LIST_ALL.equals(listMode) && !BranchListRequest.LIST_REMOTE.equals(listMode)) {
             throw new IllegalArgumentException(String.format(ERROR_UNSUPPORTED_LIST_MODE, listMode));
         }
 
         ListBranchCommand listBranchCommand = getGit().branchList();
-        if (listMode != null) {
-            if (listMode.equals(BranchListRequest.LIST_ALL)) {
-                listBranchCommand.setListMode(ListMode.ALL);
-            } else if (listMode.equals(BranchListRequest.LIST_REMOTE)) {
-                listBranchCommand.setListMode(ListMode.REMOTE);
-            }
+        if (BranchListRequest.LIST_ALL.equals(listMode)) {
+            listBranchCommand.setListMode(ListMode.ALL);
+        } else if (BranchListRequest.LIST_REMOTE.equals(listMode)) {
+            listBranchCommand.setListMode(ListMode.REMOTE);
         }
         List<Ref> refs;
         String currentRef;
