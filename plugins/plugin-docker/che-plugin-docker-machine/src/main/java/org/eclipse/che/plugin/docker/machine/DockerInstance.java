@@ -101,7 +101,7 @@ public class DockerInstance extends AbstractInstance {
                           @Assisted LineConsumer outputConsumer,
                           DockerInstanceStopDetector dockerInstanceStopDetector,
                           DockerInstanceProcessesCleaner processesCleaner,
-                          @Named("workspace.snapshot_use_registry") boolean snapshotUseRegistry) {
+                          @Named("machine.docker.snapshot_use_registry") boolean snapshotUseRegistry) {
         super(machine);
         this.dockerMachineFactory = dockerMachineFactory;
         this.container = container;

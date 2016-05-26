@@ -113,7 +113,7 @@ public class DockerInstanceProvider implements InstanceProvider {
                                   @Named("machine.docker.privilege_mode") boolean privilegeMode,
                                   @Named("machine.docker.dev_machine.machine_env") Set<String> devMachineEnvVariables,
                                   @Named("machine.docker.machine_env") Set<String> allMachinesEnvVariables,
-                                  @Named("workspace.snapshot_use_registry") boolean snapshotUseRegistry) throws IOException {
+                                  @Named("machine.docker.snapshot_use_registry") boolean snapshotUseRegistry) throws IOException {
         this.docker = docker;
         this.dockerMachineFactory = dockerMachineFactory;
         this.dockerInstanceStopDetector = dockerInstanceStopDetector;
